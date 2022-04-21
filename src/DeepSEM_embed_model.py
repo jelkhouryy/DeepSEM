@@ -135,7 +135,7 @@ import torch.optim as optim
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import TensorDataset
-
+import time 
 from src.Model import VAE_EAD
 
 Tensor = torch.FloatTensor
@@ -216,7 +216,10 @@ class deepsem_embed:
                 sparse_loss = opt.alpha * torch.mean(torch.abs(vae.adj_A))
                 loss = loss + sparse_loss
                 #print(loss, "loss shape = ", loss.shape)
+                start_t = time.time()
                 loss.backward()
+                end_t = time.time()
+                print("total backward time = {}".format(end_t - start_t))
                 mse_rec.append(loss_rec.item())
                 loss_all.append(loss.item())
                 loss_kl.append(loss_gauss.item())

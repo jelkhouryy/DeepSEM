@@ -220,7 +220,7 @@ import torch.nn.functional  as F
 from torch import nn
 from torch.autograd import Variable
 from torch.nn import init
-
+import time 
 Tensor = torch.FloatTensor
 
 
@@ -343,11 +343,14 @@ class VAE_EAD(nn.Module):
         return adj_normalized
 
     def forward(self, x, dropout_mask, opt=None):
+        start_t = time.time()
         x_ori = x
         x = x.view(x.size(0), -1, 1)
         mask = Variable(torch.from_numpy(np.ones(self.n_gene) - np.eye(self.n_gene)).float(), requires_grad=False)
         adj_A_t = self._one_minus_A_t(self.adj_A * mask)
+        start_inv = time.time()
         adj_A_t_inv = torch.inverse(adj_A_t)
+        end_inv = time.time()
         out_inf = self.inference(x, adj_A_t)
         z = out_inf['gaussian']
         z_inv = torch.matmul(z, adj_A_t_inv)
@@ -359,4 +362,8 @@ class VAE_EAD(nn.Module):
         loss_rec = self.losses.reconstruction_loss(x_ori, output['x_rec'], dropout_mask, 'mse')
         loss_gauss = self.losses.KL_loss(output['mean'], output['var']) * opt.beta
         loss = loss_rec + loss_gauss 
+        end_t = time.time()
+        print("inversion time = {}".format(end_inv - start_inv))
+        print("total forward time = {}".format(end_t - start_t))
+        print("inversion takes {} percent of forward time".format((end_inv - start_inv)/(end_t - start_t)*100))
         return loss, loss_rec, loss_gauss, dec, output['mean']
