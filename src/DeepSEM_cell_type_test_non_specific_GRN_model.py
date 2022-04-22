@@ -12,7 +12,9 @@ from src.utils import evaluate, extractEdgesFromMatrix
 from src.Model import VAE_EAD
 import time
 
-Tensor = torch.cuda.FloatTensor
+Tensor = torch.FloatTensor
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 class test_non_celltype_GRN_model:
     def __init__(self,opt):
         self.opt = opt
@@ -48,7 +50,7 @@ class test_non_celltype_GRN_model:
         opt = self.opt
         dataloader,  num_nodes, num_genes, data, gene_name,  = self.init_data()
         adj_A_init  = self.initalize_A(data)
-        vae = VAE_EAD(adj_A_init, 1, opt.n_hidden, opt.K).float().cuda()
+        vae = VAE_EAD(adj_A_init, 1, opt.n_hidden, opt.K).float().to(device)
         optimizer = optim.RMSprop(vae.parameters(), lr=opt.lr)
         optimizer2 = optim.RMSprop([vae.adj_A], lr=opt.lr * 0.2)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opt.lr_step_size, gamma=opt.gamma)

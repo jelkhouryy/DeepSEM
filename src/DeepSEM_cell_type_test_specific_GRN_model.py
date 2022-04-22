@@ -13,7 +13,8 @@ from torch.utils.data.dataset import TensorDataset
 from src.Model import VAE_EAD
 from src.utils import extractEdgesFromMatrix
 
-Tensor = torch.cuda.FloatTensor
+Tensor = torch.FloatTensor
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class celltype_GRN_model:
@@ -63,8 +64,8 @@ class celltype_GRN_model:
     def train_model(self):
         dataloader, num_nodes, num_genes, data, gene_name = self.init_data()
         adj_A_init = self.initalize_A(data)
-        vae = VAE_EAD(adj_A_init, 1, self.opt.n_hidden, self.opt.K).float().cuda()
-        Tensor = torch.cuda.FloatTensor
+        vae = VAE_EAD(adj_A_init, 1, self.opt.n_hidden, self.opt.K).float().to(device)
+        
         optimizer = optim.RMSprop(vae.parameters(), lr=self.opt.lr)
         optimizer2 = optim.RMSprop([vae.adj_A], lr=self.opt.lr * 0.2)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=self.opt.lr_step_size, gamma=self.opt.gamma)
@@ -80,16 +81,14 @@ class celltype_GRN_model:
                 inputs, data_id, dropout_mask = data_batch
                 inputs = Variable(inputs.type(Tensor))
                 data_ids.append(data_id.cpu().detach().numpy())
-                temperature = max(0.95 ** epoch, 0.5)
-                loss, loss_rec, loss_gauss, loss_cat, dec, y, hidden = vae(inputs, dropout_mask=dropout_mask.cuda(),
-                                                                           temperature=temperature, opt=self.opt)
+                loss, loss_rec, loss_gauss, dec, hidden = vae(inputs.to(device), dropout_mask=dropout_mask.to(device), opt=self.opt)
                 sparse_loss = self.opt.alpha * torch.mean(torch.abs(vae.adj_A))
                 loss = loss + sparse_loss
                 loss = loss
                 loss.backward()
                 mse_rec.append(loss_rec.item())
                 loss_all.append(loss.item())
-                loss_kl.append(loss_gauss.item() + loss_cat.item())
+                loss_kl.append(loss_gauss.item())
                 loss_sparse.append(sparse_loss.item())
                 if epoch % (self.opt.K1 + self.opt.K2) < self.opt.K1:
                     optimizer.step()

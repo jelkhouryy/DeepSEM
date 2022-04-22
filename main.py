@@ -25,7 +25,7 @@ parser.add_argument('--n_hidden', type=int, default=128, help='The Number of hid
 parser.add_argument('--K', type=int, default=1, help='Number of Gaussian kernel in GMM, default =1')
 parser.add_argument('--K1', type=int, default=1, help='The Number of epoch for optimize MLP. Notes that we optimize MLP and W alternately. The default setting denotes to optimize MLP for one epoch then optimize W for two epochs.')
 parser.add_argument('--K2', type=int, default=2, help='The Number of epoch for optimize W. Notes that we optimize MLP and W alternately. The default setting denotes to optimize MLP for one epoch then optimize W for two epochs.')
-parser.add_argument('--save_name', type=str, default='/tmp')
+parser.add_argument('--save_name', type=str, default='out')
 opt = parser.parse_args()
 if opt.task == 'non_celltype_GRN':
     if opt.setting == 'default':

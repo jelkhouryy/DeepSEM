@@ -223,6 +223,7 @@ from torch.nn import init
 import time 
 Tensor = torch.FloatTensor
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def kl_loss(z_mean, z_stddev):
     mean_sq = z_mean * z_mean
@@ -339,14 +340,14 @@ class VAE_EAD(nn.Module):
                     init.constant_(m.bias, 0)
 
     def _one_minus_A_t(self, adj):
-        adj_normalized = Tensor(np.eye(adj.shape[0])) - (adj.transpose(0, 1))
+        adj_normalized = torch.eye(adj.shape[0]).to(device) - (adj.transpose(0, 1))
         return adj_normalized
 
     def forward(self, x, dropout_mask, opt=None):
         start_t = time.time()
         x_ori = x
         x = x.view(x.size(0), -1, 1)
-        mask = Variable(torch.from_numpy(np.ones(self.n_gene) - np.eye(self.n_gene)).float(), requires_grad=False)
+        mask = Variable(torch.from_numpy(np.ones(self.n_gene) - np.eye(self.n_gene)).float(), requires_grad=False).to(device)
         adj_A_t = self._one_minus_A_t(self.adj_A * mask)
         start_inv = time.time()
         adj_A_t_inv = torch.inverse(adj_A_t)
@@ -363,7 +364,7 @@ class VAE_EAD(nn.Module):
         loss_gauss = self.losses.KL_loss(output['mean'], output['var']) * opt.beta
         loss = loss_rec + loss_gauss 
         end_t = time.time()
-        print("inversion time = {}".format(end_inv - start_inv))
-        print("total forward time = {}".format(end_t - start_t))
-        print("inversion takes {} percent of forward time".format((end_inv - start_inv)/(end_t - start_t)*100))
+        #print("inversion time = {}".format(end_inv - start_inv))
+        #print("total forward time = {}".format(end_t - start_t))
+        #print("inversion takes {} percent of forward time".format((end_inv - start_inv)/(end_t - start_t)*100))
         return loss, loss_rec, loss_gauss, dec, output['mean']

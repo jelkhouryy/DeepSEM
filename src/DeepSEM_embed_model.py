@@ -139,7 +139,7 @@ import time
 from src.Model import VAE_EAD
 
 Tensor = torch.FloatTensor
-
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class deepsem_embed:
     def __init__(self, opt):
@@ -196,6 +196,7 @@ class deepsem_embed:
         dataloader, num_nodes, num_genes, data, TFmask2, gene_name, Dropout_Mask = self.init_data()
         adj_A_init = self.initalize_A(data)
         vae = VAE_EAD(adj_A_init, 1, opt.n_hidden, opt.K).float()
+        vae.to(device)
         optimizer = optim.RMSprop(vae.parameters(), lr=opt.lr)
         optimizer2 = optim.RMSprop([vae.adj_A], lr=opt.lr * 0.2)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opt.lr_step_size, gamma=opt.gamma)
@@ -212,14 +213,14 @@ class deepsem_embed:
                 inputs = Variable(inputs.type(Tensor))
                 data_ids.append(data_id.cpu().detach().numpy())
                 #temperature = max(0.95 ** epoch, 0.5)
-                loss, loss_rec, loss_gauss, dec, hidden = vae(inputs, dropout_mask=dropout_mask, opt=opt)
+                loss, loss_rec, loss_gauss, dec, hidden = vae(inputs.to(device), dropout_mask=dropout_mask.to(device), opt=opt)
                 sparse_loss = opt.alpha * torch.mean(torch.abs(vae.adj_A))
                 loss = loss + sparse_loss
                 #print(loss, "loss shape = ", loss.shape)
                 start_t = time.time()
                 loss.backward()
                 end_t = time.time()
-                print("total backward time = {}".format(end_t - start_t))
+                #print("total backward time = {}".format(end_t - start_t))
                 mse_rec.append(loss_rec.item())
                 loss_all.append(loss.item())
                 loss_kl.append(loss_gauss.item())
@@ -239,8 +240,8 @@ class deepsem_embed:
             optimizer.zero_grad()
             inputs, data_id, dropout_mask = data_batch
             inputs = Variable(inputs.type(Tensor))
-            loss, loss_rec, loss_gauss, dec, hidden2 = vae(inputs,
-                        dropout_mask=dropout_mask,opt=opt)
+            loss, loss_rec, loss_gauss, dec, hidden2 = vae(inputs.to(device),
+                        dropout_mask=dropout_mask.to(device),opt=opt)
             data_ids.append(data_id.detach().numpy())
             embeds.append(hidden2.cpu().detach().numpy())
         data_ids = np.hstack(data_ids)

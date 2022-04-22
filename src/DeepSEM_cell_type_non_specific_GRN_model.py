@@ -12,7 +12,8 @@ from torch.utils.data.dataset import TensorDataset
 from src.Model import VAE_EAD
 from src.utils import evaluate, extractEdgesFromMatrix
 
-Tensor = torch.cuda.FloatTensor
+Tensor = torch.FloatTensor
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class non_celltype_GRN_model:
@@ -68,7 +69,7 @@ class non_celltype_GRN_model:
         opt = self.opt
         dataloader, Evaluate_Mask, num_nodes, num_genes, data, truth_edges, TFmask2, gene_name = self.init_data()
         adj_A_init = self.initalize_A(data)
-        vae = VAE_EAD(adj_A_init, 1, opt.n_hidden, opt.K).float().cuda()
+        vae = VAE_EAD(adj_A_init, 1, opt.n_hidden, opt.K).float().to(device)
         optimizer = optim.RMSprop(vae.parameters(), lr=opt.lr)
         optimizer2 = optim.RMSprop([vae.adj_A], lr=opt.lr * 0.2)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opt.lr_step_size, gamma=opt.gamma)
@@ -86,14 +87,13 @@ class non_celltype_GRN_model:
                 inputs = Variable(inputs.type(Tensor))
                 data_ids.append(data_id.cpu().detach().numpy())
                 temperature = max(0.95 ** epoch, 0.5)
-                loss, loss_rec, loss_gauss, loss_cat, dec, y, hidden = vae(inputs, dropout_mask=None,
-                                                                           temperature=temperature, opt=opt)
+                loss, loss_rec, loss_gauss, dec, hidden = vae(inputs.to(device), dropout_mask=None, opt=opt)
                 sparse_loss = opt.alpha * torch.mean(torch.abs(vae.adj_A))
                 loss = loss + sparse_loss
                 loss.backward()
                 mse_rec.append(loss_rec.item())
                 loss_all.append(loss.item())
-                loss_kl.append(loss_gauss.item() + loss_cat.item())
+                loss_kl.append(loss_gauss.item())
                 loss_sparse.append(sparse_loss.item())
                 if epoch % (opt.K1 + opt.K2) < opt.K1:
                     optimizer.step()
