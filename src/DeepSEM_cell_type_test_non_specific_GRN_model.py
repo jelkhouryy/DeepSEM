@@ -56,7 +56,7 @@ class test_non_celltype_GRN_model:
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opt.lr_step_size, gamma=opt.gamma)
         best_Epr = 0
         vae.train()
-        print(vae)
+        print(vae.parameters())
         for epoch in range(opt.n_epochs+1):
             start_time = time.time()
             loss_all, mse_rec, loss_kl, data_ids, loss_tfs, loss_sparse = [], [], [], [], [], []
@@ -70,13 +70,13 @@ class test_non_celltype_GRN_model:
                 inputs = Variable(inputs.type(Tensor))
                 data_ids.append(data_id.cpu().detach().numpy())
                 temperature = max(0.95 ** epoch, 0.5)
-                loss, loss_rec, loss_gauss, loss_cat, dec, y, hidden = vae(inputs,dropout_mask=None,temperature=temperature,opt=opt)
+                loss, loss_rec, loss_gauss, dec, hidden = vae(inputs,dropout_mask=None,temperature=temperature,opt=opt)
                 sparse_loss = opt.alpha * torch.mean(torch.abs(vae.adj_A))
                 loss = loss + sparse_loss
                 loss.backward()
                 mse_rec.append(loss_rec.item())
                 loss_all.append(loss.item())
-                loss_kl.append(loss_gauss.item() + loss_cat.item())
+                loss_kl.append(loss_gauss.item())
                 loss_sparse.append(sparse_loss.item())
                 if epoch % (opt.K1+opt.K2) < opt.K1:
                     optimizer.step()
