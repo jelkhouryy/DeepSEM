@@ -12,7 +12,8 @@ from torch.utils.data.dataset import TensorDataset
 from src.Model import VAE_EAD
 from src.utils import evaluate, extractEdgesFromMatrix
 
-Tensor = torch.cuda.FloatTensor
+Tensor = torch.FloatTensor
+device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
 
 
 class non_celltype_GRN_model:
@@ -68,7 +69,7 @@ class non_celltype_GRN_model:
         opt = self.opt
         dataloader, Evaluate_Mask, num_nodes, num_genes, data, truth_edges, TFmask2, gene_name = self.init_data()
         adj_A_init = self.initalize_A(data)
-        vae = VAE_EAD(adj_A_init, 1, opt.n_hidden, opt.K).float().cuda()
+        vae = VAE_EAD(adj_A_init, 1, opt.n_hidden, opt.K).float().to(device)
         optimizer = optim.RMSprop(vae.parameters(), lr=opt.lr)
         optimizer2 = optim.RMSprop([vae.adj_A], lr=opt.lr * 0.2)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opt.lr_step_size, gamma=opt.gamma)
