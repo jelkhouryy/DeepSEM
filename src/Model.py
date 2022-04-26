@@ -6,7 +6,7 @@
 # from torch.nn import init
 
 # Tensor = torch.FloatTensor
-
+# device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
 
 # def kl_loss(z_mean, z_stddev):
 #     mean_sq = z_mean * z_mean
@@ -35,7 +35,7 @@
 #         if self.eps > 0.0:
 #             var = var + self.eps
 #         return -0.5 * torch.mean(
-#             torch.log(torch.FloatTensor([2.0 * np.pi])).sum(0) + torch.log(var) + torch.pow(x - mu, 2) / var, dim=-1)
+#             torch.log(torch.FloatTensor([2.0 * np.pi]).to(device)).sum(0) + torch.log(var) + torch.pow(x - mu, 2) / var, dim=-1)
 
 #     def gaussian_loss(self, z, z_mu, z_var, z_mu_prior, z_var_prior):
 #         loss = self.log_normal(z, z_mu, z_var) - self.log_normal(z, z_mu_prior, z_var_prior)
@@ -54,12 +54,12 @@
 #         self.f_dim = f_dim
 #         self.c_dim = c_dim
 
-#     def sample_gumbel(self, shape, is_cuda=False, eps=1e-20):
-#         U = torch.rand(shape)
+#     def sample_gumbel(self, shape, eps=1e-20):
+#         U = torch.rand(shape).to(device)
 #         return -torch.log(-torch.log(U + eps) + eps)
 
 #     def gumbel_softmax_sample(self, logits, temperature):
-#         y = logits + self.sample_gumbel(logits.size(), logits.is_cuda)
+#         y = logits + self.sample_gumbel(logits.size())
 #         return F.softmax(y / temperature, dim=-1)
 
 #     def gumbel_softmax(self, logits, temperature, ):
@@ -189,13 +189,13 @@
 #                     init.constant_(m.bias, 0)
 
 #     def _one_minus_A_t(self, adj):
-#         adj_normalized = Tensor(np.eye(adj.shape[0])) - (adj.transpose(0, 1))
+#         adj_normalized = Tensor(np.eye(adj.shape[0])).to(device) - (adj.transpose(0, 1))
 #         return adj_normalized
 
 #     def forward(self, x, dropout_mask, temperature=1.0, opt=None, ):
 #         x_ori = x
 #         x = x.view(x.size(0), -1, 1)
-#         mask = Variable(torch.from_numpy(np.ones(self.n_gene) - np.eye(self.n_gene)).float(), requires_grad=False)
+#         mask = Variable(torch.from_numpy(np.ones(self.n_gene) - np.eye(self.n_gene)).float(), requires_grad=False).to(device)
 #         adj_A_t = self._one_minus_A_t(self.adj_A * mask)
 #         adj_A_t_inv = torch.inverse(adj_A_t)
 #         out_inf = self.inference(x, adj_A_t, temperature)
@@ -211,7 +211,6 @@
 #         loss_cat = (-self.losses.entropy(output['logits'], output['prob_cat']) - np.log(0.1)) * opt.beta
 #         loss = loss_rec + loss_gauss + loss_cat
 #         return loss, loss_rec, loss_gauss, loss_cat, dec, y, output['mean']
-
 
 
 import numpy as np
@@ -249,6 +248,16 @@ class LossFunctions:
 
     def KL_loss(self, z_mu, z_var):
         return -0.5*torch.mean(1 + torch.log(z_var) - torch.pow(z_var, 2) - torch.pow(z_mu, 2))
+
+    def log_normal(self, x, mu, var):
+        if self.eps > 0.0:
+            var = var + self.eps
+        return -0.5 * torch.mean(
+            torch.log(torch.FloatTensor([2.0 * np.pi]).cuda()).sum(0) + torch.log(var) + torch.pow(x - mu, 2) / var, dim=-1)
+
+    def gaussian_loss(self, z, z_mu, z_var):#, z_mu_prior, z_var_prior):
+        loss = self.log_normal(z, z_mu, z_var) #- self.log_normal(z, z_mu_prior, z_var_prior)
+        return loss.mean()
 
     def entropy(self, logits, targets):
         log_q = F.log_softmax(logits, dim=-1)
@@ -328,6 +337,7 @@ class VAE_EAD(nn.Module):
     def __init__(self, adj_A, x_dim, z_dim, y_dim):
         super(VAE_EAD, self).__init__()
         self.adj_A = nn.Parameter(Variable(torch.from_numpy(adj_A).double(), requires_grad=True, name='adj_A'))
+        self.adj_inv = nn.Parameter(Variable(torch.from_numpy(np.linalg.inv(adj_A)).double(), requires_grad=True, name='adj_inv'))
         self.n_gene = n_gene = len(adj_A)
         nonLinear = nn.Tanh()
         self.inference = InferenceNet(x_dim, z_dim, nonLinear)
@@ -350,7 +360,10 @@ class VAE_EAD(nn.Module):
         mask = Variable(torch.from_numpy(np.ones(self.n_gene) - np.eye(self.n_gene)).float(), requires_grad=False).to(device)
         adj_A_t = self._one_minus_A_t(self.adj_A * mask)
         start_inv = time.time()
-        adj_A_t_inv = torch.inverse(adj_A_t)
+        if opt.inverse:
+            adj_A_t_inv = torch.inverse(adj_A_t)
+        else:
+            adj_A_t_inv = self.adj_inv
         end_inv = time.time()
         out_inf = self.inference(x, adj_A_t)
         z = out_inf['gaussian']
@@ -361,6 +374,7 @@ class VAE_EAD(nn.Module):
             output[key] = value
         dec = output['x_rec']
         loss_rec = self.losses.reconstruction_loss(x_ori, output['x_rec'], dropout_mask, 'mse')
+        #loss_gauss = self.losses.gaussian_loss(z, output['mean'], output['var']) * opt.beta
         loss_gauss = self.losses.KL_loss(output['mean'], output['var']) * opt.beta
         loss = loss_rec + loss_gauss 
         end_t = time.time()
