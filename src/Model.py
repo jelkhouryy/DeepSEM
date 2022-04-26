@@ -189,7 +189,7 @@ class VAE_EAD(nn.Module):
                     init.constant_(m.bias, 0)
 
     def _one_minus_A_t(self, adj):
-        adj_normalized = Tensor(np.eye(adj.shape[0])) - (adj.transpose(0, 1))
+        adj_normalized = Tensor(np.eye(adj.shape[0])).to(device) - (adj.transpose(0, 1))
         return adj_normalized
 
     def forward(self, x, dropout_mask, temperature=1.0, opt=None, ):

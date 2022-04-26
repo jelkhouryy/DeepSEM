@@ -1,25 +1,28 @@
 import os
 import numpy as np
 import pandas as pd
-import torch
-import torch.nn as nn
 import scanpy as sc
+import torch
 import torch.optim as optim
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import TensorDataset
-from src.utils import evaluate, extractEdgesFromMatrix
 from src.Model import VAE_EAD
+from src.utils import evaluate, extractEdgesFromMatrix
+
+Tensor = torch.FloatTensor
+device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
 
 
 class celltype_GRN_model:
-    def __init__(self,opt):
+    def __init__(self, opt):
         self.opt = opt
         try:
             os.mkdir(opt.save_name)
         except:
             print('dir exist')
-    def initalize_A(self,data):
+
+    def initalize_A(self, data):
         num_genes = data.shape[1]
         A = np.ones([num_genes, num_genes]) / (num_genes - 1) + (np.random.rand(num_genes * num_genes) * 0.0002).reshape(
             [num_genes, num_genes])
@@ -27,8 +30,7 @@ class celltype_GRN_model:
             A[i, i] = 0
         return A
 
-
-    def init_data(self,):
+    def init_data(self):
         Ground_Truth = pd.read_csv(self.opt.net_file, header=0)
         data = sc.read(self.opt.data_file)
         gene_name = list(data.var_names)
@@ -73,23 +75,21 @@ class celltype_GRN_model:
         A_truth = truth_df.values
         idx_rec, idx_send = np.where(A_truth)
         truth_edges = set(zip(idx_send, idx_rec))
-        return dataloader, Evaluate_Mask, num_nodes, num_genes, data, truth_edges, TF_mask, gene_name,
-
+        return dataloader, Evaluate_Mask, num_nodes, num_genes, data, truth_edges, TF_mask, gene_name
 
     def train_model(self):
-        dataloader, Evaluate_Mask, num_nodes, num_genes, data, truth_edges, TFmask2, gene_name  = self.init_data()
-        adj_A_init  = self.initalize_A(data)
-        vae = VAE_EAD(adj_A_init, 1, self.opt.n_hidden, self.opt.K).float().cuda()
-        Tensor = torch.cuda.FloatTensor
-        optimizer = optim.RMSprop(vae.parameters(), lr=self.opt.lr)
-        optimizer2 = optim.RMSprop([vae.adj_A], lr=self.opt.lr * 0.2)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=self.opt.lr_step_size, gamma=self.opt.gamma)
+        opt = self.opt
+        dataloader, Evaluate_Mask, num_nodes, num_genes, data, truth_edges, TFmask2, gene_name = self.init_data()
+        adj_A_init = self.initalize_A(data)
+        vae = VAE_EAD(adj_A_init, 1, opt.n_hidden, opt.K).float().to(device)
+        optimizer = optim.RMSprop(vae.parameters(), lr=opt.lr)
+        optimizer2 = optim.RMSprop([vae.adj_A], lr=opt.lr * 0.2)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opt.lr_step_size, gamma=opt.gamma)
         best_Epr = 0
         vae.train()
-        print(vae)
-        for epoch in range(self.opt.n_epochs+1):
+        for epoch in range(opt.n_epochs + 1):
             loss_all, mse_rec, loss_kl, data_ids, loss_tfs, loss_sparse = [], [], [], [], [], []
-            if epoch % (self.opt.K1+self.opt.K2) < self.opt.K1:
+            if epoch % (opt.K1 + opt.K2) < opt.K1:
                 vae.adj_A.requires_grad = False
             else:
                 vae.adj_A.requires_grad = True
@@ -99,39 +99,40 @@ class celltype_GRN_model:
                 inputs = Variable(inputs.type(Tensor))
                 data_ids.append(data_id.cpu().detach().numpy())
                 temperature = max(0.95 ** epoch, 0.5)
-                loss, loss_rec, loss_gauss, loss_cat, dec, y, hidden = vae(inputs,dropout_mask=dropout_mask.cuda(),temperature=temperature,opt=self.opt)
-                sparse_loss = self.opt.alpha * torch.mean(torch.abs(vae.adj_A))
+                loss, loss_rec, loss_gauss, loss_cat, dec, y, hidden = vae(inputs.to(device), dropout_mask=dropout_mask.to(device),
+                                                                            temperature=temperature, opt=opt)
+                sparse_loss = opt.alpha * torch.mean(torch.abs(vae.adj_A))
                 loss = loss + sparse_loss
                 loss.backward()
                 mse_rec.append(loss_rec.item())
                 loss_all.append(loss.item())
                 loss_kl.append(loss_gauss.item() + loss_cat.item())
                 loss_sparse.append(sparse_loss.item())
-                if epoch % (self.opt.K1+self.opt.K2) < self.opt.K1:
+                if epoch % (opt.K1 + opt.K2) < opt.K1:
                     optimizer.step()
                 else:
                     optimizer2.step()
             scheduler.step()
-            if epoch % (self.opt.K1+self.opt.K2) >= self.opt.K1:
-                Ep, Epr =  evaluate(vae.adj_A.cpu().detach().numpy(), truth_edges, Evaluate_Mask)
+            if epoch % (opt.K1 + opt.K2) >= opt.K1:
+                Ep, Epr = evaluate(vae.adj_A.cpu().detach().numpy(), truth_edges, Evaluate_Mask)
                 best_Epr = max(Epr, best_Epr)
                 print('epoch:', epoch, 'Ep:', Ep, 'Epr:', Epr, 'loss:',
-                      np.mean(loss_all), 'mse_loss:', np.mean(mse_rec), 'kl_loss:', np.mean(loss_kl), 'sparse_loss:',np.mean(loss_sparse))
-        extractEdgesFromMatrix(vae.adj_A.cpu().detach().numpy(), gene_name,TFmask2).to_csv(
-        self.opt.save_name + '/GRN_inference_result.tsv', sep='\t', index=False)
+                      np.mean(loss_all), 'mse_loss:', np.mean(mse_rec), 'kl_loss:', np.mean(loss_kl), 'sparse_loss:',
+                      np.mean(loss_sparse))
+        extractEdgesFromMatrix(vae.adj_A.cpu().detach().numpy(), gene_name, TFmask2).to_csv(
+        opt.save_name + '/GRN_inference_result.tsv', sep='\t', index=False)
 
 # import os
 # import numpy as np
 # import pandas as pd
-# import torch
-# import torch.nn as nn
 # import scanpy as sc
+# import torch
 # import torch.optim as optim
 # from torch.autograd import Variable
 # from torch.utils.data import DataLoader
 # from torch.utils.data.dataset import TensorDataset
-# from src.utils import evaluate, extractEdgesFromMatrix
 # from src.Model import VAE_EAD
+# from src.utils import evaluate, extractEdgesFromMatrix
 
 # Tensor = torch.FloatTensor
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

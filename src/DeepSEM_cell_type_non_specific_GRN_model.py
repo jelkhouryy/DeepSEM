@@ -87,7 +87,7 @@ class non_celltype_GRN_model:
                 inputs = Variable(inputs.type(Tensor))
                 data_ids.append(data_id.cpu().detach().numpy())
                 temperature = max(0.95 ** epoch, 0.5)
-                loss, loss_rec, loss_gauss, loss_cat, dec, y, hidden = vae(inputs, dropout_mask=None,
+                loss, loss_rec, loss_gauss, loss_cat, dec, y, hidden = vae(inputs.to(device), dropout_mask=None,
                                                                            temperature=temperature, opt=opt)
                 sparse_loss = opt.alpha * torch.mean(torch.abs(vae.adj_A))
                 loss = loss + sparse_loss
