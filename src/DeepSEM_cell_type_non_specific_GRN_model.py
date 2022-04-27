@@ -178,18 +178,19 @@ class non_celltype_GRN_model:
         opt = self.opt
         dataloader, Evaluate_Mask, num_nodes, num_genes, data, truth_edges, TFmask2, gene_name = self.init_data()
         adj_A_init = self.initalize_A(data)
-        vae = VAE_EAD(adj_A_init, 1, opt.n_hidden, opt.K).float().to(device)
+        vae = VAE_EAD(adj_A_init, 1, opt.n_hidden).float().to(device)
         optimizer = optim.RMSprop(vae.parameters(), lr=opt.lr)
         if self.opt.inverse:
             optimizer2 = optim.RMSprop([vae.adj_A], lr=opt.lr * 0.2)
         else:
-            optimizer2 = optim.RMSprop([vae.adj_A, vae.adj_inv], lr=self.opt.lr * 0.2)
-
+            optimizer2 = optim.RMSprop([vae.adj_A, vae.adj_inv], lr=opt.lr * 0.2)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opt.lr_step_size, gamma=opt.gamma)
         best_Epr = 0
         vae.train()
         for epoch in range(opt.n_epochs+1):
-            loss_all, mse_rec, loss_kl, data_ids, loss_tfs, loss_sparse = [], [], [], [], [], []
+            
+            
+            loss_all, mse_rec, loss_kl, data_ids, loss_tfs, loss_sparse, loss_inv = [], [], [], [], [], [], []
             if epoch % (opt.K1 + opt.K2) < opt.K1:
                 vae.adj_A.requires_grad = False
             else:
@@ -201,22 +202,26 @@ class non_celltype_GRN_model:
                 data_ids.append(data_id.cpu().detach().numpy())
                 loss, loss_rec, loss_gauss, dec, hidden = vae(inputs.to(device), dropout_mask=None, opt=opt)
                 sparse_loss = opt.alpha * torch.mean(torch.abs(vae.adj_A))
-                loss = loss + sparse_loss
+                #inv_loss = torch.mean(torch.pow(torch.matmul(vae.adj_A, vae.adj_inv) - torch.eye(vae.adj_A.shape[0]).to(device), 2))
+                loss = loss + sparse_loss #+ inv_loss
+                
                 loss.backward()
                 mse_rec.append(loss_rec.item())
                 loss_all.append(loss.item())
                 loss_kl.append(loss_gauss.item())
                 loss_sparse.append(sparse_loss.item())
+                #loss_inv.append(inv_loss.item())
                 if epoch % (opt.K1 + opt.K2) < opt.K1:
                     optimizer.step()
                 else:
                     optimizer2.step()
+
             scheduler.step()
             if epoch % (opt.K1 + opt.K2) >= opt.K1:
                 Ep, Epr = evaluate(vae.adj_A.cpu().detach().numpy(), truth_edges, Evaluate_Mask)
                 best_Epr = max(Epr, best_Epr)
                 print('epoch:', epoch, 'Ep:', Ep, 'Epr:', Epr, 'loss:',
                       np.mean(loss_all), 'mse_loss:', np.mean(mse_rec), 'kl_loss:', np.mean(loss_kl), 'sparse_loss:',
-                      np.mean(loss_sparse))
+                      np.mean(loss_sparse))#, 'inv_loss', np.mean(loss_inv))
         extractEdgesFromMatrix(vae.adj_A.cpu().detach().numpy(), gene_name,TFmask2).to_csv(
             opt.save_name + '/GRN_inference_result.tsv', sep='\t', index=False)

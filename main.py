@@ -16,7 +16,7 @@ parser.add_argument('--batch_size', type=int, default=64, help='The batch size u
 parser.add_argument('--data_file', type=str, help='The input scRNA-seq gene expression file.')
 parser.add_argument('--net_file', type=str, default='',
                     help='The ground truth of GRN. Only used in GRN inference task if available. ')
-parser.add_argument('--inverse', type=bool, default=True, help = "whether or not to impose that decoder is inverse of encoder") 
+parser.add_argument('--inverse', type=int, default=1, help = "whether or not to impose that decoder is inverse of encoder") 
 parser.add_argument('--alpha', type=float, default=100, help='The loss coefficient for L1 norm of W, which is same as \\alpha used in our paper.')
 parser.add_argument('--beta', type=float, default=1, help='The loss coefficient for KL term (beta-VAE), which is same as \\beta used in our paper.')
 parser.add_argument('--lr', type=float, default=1e-4, help='The learning rate of used for RMSprop.')

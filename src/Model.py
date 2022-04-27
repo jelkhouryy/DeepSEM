@@ -334,11 +334,11 @@ class GenerativeNet(nn.Module):
 
 
 class VAE_EAD(nn.Module):
-    def __init__(self, adj_A, x_dim, z_dim, y_dim):
+    def __init__(self, adj_A, x_dim, z_dim):
         super(VAE_EAD, self).__init__()
         self.adj_A = nn.Parameter(Variable(torch.from_numpy(adj_A).double(), requires_grad=True, name='adj_A'))
         self.adj_inv = nn.Parameter(Variable(torch.from_numpy(np.linalg.inv(adj_A)).double(), requires_grad=True, name='adj_inv'))
-        self.n_gene = n_gene = len(adj_A)
+        self.n_gene = len(adj_A)
         nonLinear = nn.Tanh()
         self.inference = InferenceNet(x_dim, z_dim, nonLinear)
         self.generative = GenerativeNet(x_dim, z_dim, nonLinear)
@@ -374,7 +374,7 @@ class VAE_EAD(nn.Module):
             output[key] = value
         dec = output['x_rec']
         loss_rec = self.losses.reconstruction_loss(x_ori, output['x_rec'], dropout_mask, 'mse')
-        #loss_gauss = self.losses.gaussian_loss(z, output['mean'], output['var']) * opt.beta
+        #loss_gauss = self.losses.gaussian_loss(z, output['mean'], output['var']) * opt.beta #what is this loss? 
         loss_gauss = self.losses.KL_loss(output['mean'], output['var']) * opt.beta
         loss = loss_rec + loss_gauss 
         end_t = time.time()
