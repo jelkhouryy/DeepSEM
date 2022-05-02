@@ -1,6 +1,7 @@
 data/
 tutorial/out
 .vscode
+.DS_Store
 # Byte-compiled / optimized / DLL files
 src/__pycache__
 __pycache__/
