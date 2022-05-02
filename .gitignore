@@ -1,5 +1,5 @@
 data/
-
+tutorial/out
 # Byte-compiled / optimized / DLL files
 src/__pycache__
 __pycache__/
