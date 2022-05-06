@@ -206,7 +206,7 @@ class celltype_GRN_model:
         opt = self.opt
         dataloader, Evaluate_Mask, num_nodes, num_genes, data, truth_edges, TFmask2, gene_name = self.init_data()
         adj_A_init = self.initalize_A(data)
-        vae = VAE_EAD(adj_A_init, 1, opt.n_hidden, opt.K).float().to(device)
+        vae = VAE_EAD(adj_A_init, 1, opt.n_hidden).float().to(device)
         optimizer = optim.RMSprop(vae.parameters(), lr=opt.lr)
         if self.opt.inverse:
             optimizer2 = optim.RMSprop([vae.adj_A], lr=opt.lr * 0.2)
