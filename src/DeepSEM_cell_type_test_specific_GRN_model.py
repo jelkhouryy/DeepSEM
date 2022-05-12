@@ -1,6 +1,4 @@
 import os
-import time
-
 import numpy as np
 import pandas as pd
 import scanpy as sc
@@ -9,7 +7,6 @@ import torch.optim as optim
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data.dataset import TensorDataset
-
 from src.Model import VAE_EAD
 from src.utils import extractEdgesFromMatrix
 
@@ -18,14 +15,13 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class celltype_GRN_model:
-    def __init__(self, opt):
+    def __init__(self,opt):
         self.opt = opt
         try:
             os.mkdir(opt.save_name)
         except:
-            print('save dir exist')
-
-    def initalize_A(self, data):
+            print('dir exist')
+    def initalize_A(self,data):
         num_genes = data.shape[1]
         A = np.ones([num_genes, num_genes]) / (num_genes - 1) + (np.random.rand(num_genes * num_genes) * 0.0002).reshape(
             [num_genes, num_genes])
@@ -33,7 +29,7 @@ class celltype_GRN_model:
             A[i, i] = 0
         return A
 
-    def init_data(self, ):
+    def init_data(self):
         data = sc.read(self.opt.data_file)
         gene_name = list(data.var_names)
         data_values = data.X
@@ -81,10 +77,9 @@ class celltype_GRN_model:
                 inputs, data_id, dropout_mask = data_batch
                 inputs = Variable(inputs.type(Tensor))
                 data_ids.append(data_id.cpu().detach().numpy())
-                loss, loss_rec, loss_gauss, dec, hidden = vae(inputs.to(device), dropout_mask=dropout_mask.to(device), opt=self.opt)
+                loss, loss_rec, loss_gauss, dec, hidden = vae(inputs.to(device),dropout_mask=dropout_mask.to(device),opt=self.opt)
                 sparse_loss = self.opt.alpha * torch.mean(torch.abs(vae.adj_A))
                 loss = loss + sparse_loss
-                loss = loss
                 loss.backward()
                 mse_rec.append(loss_rec.item())
                 loss_all.append(loss.item())
